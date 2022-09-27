@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\FoodRequest;
 use App\Http\Resources\FoodsResource;
+use App\Interfaces\FoodInterface;
 use App\Models\FoodDetails;
 use App\Models\Foods;
 use Illuminate\Http\Request;
@@ -12,45 +13,21 @@ use Exception;
 
 class FoodsController extends Controller
 {
+    protected $foodInterface;
+
+    public function __construct(FoodInterface $foodInterface)
+    {
+        $this->foodInterface = $foodInterface;
+    }
+
     public function index(Request $request)
     {
-        $food_name = $request->food_name;
-        $foods = Foods::with('foodDetails.foodMaterials')
-            ->when($food_name !== null, function ($query) use ($food_name) {
-                $query->where('food_name', 'like', "%$food_name%");
-            })
-            ->paginate(10);
-
-        $foods->map(function ($data) {
-            $data->foodDetails->map(function ($detail) {
-                $detail->food_material_name = $detail->foodMaterials->material_name;
-                return $detail;
-            });
-            return $data;
-        });
-        return new FoodsResource(true, "Data Loaded", $foods);
+        return $this->foodInterface->getAllFoods($request);
     }
 
     public function store(FoodRequest $request)
     {
-        DB::beginTransaction();
-        try {
-            $food = Foods::create($request->validated());
-            $foodID = $food->id;
-            $foodDetails = $request->food_details;
-            foreach ($foodDetails as $foodDetail) {
-                $foodDetailData = [
-                    "food_material_id" => $foodDetail['food_material_id'],
-                    "food_id" => $foodID
-                ];
-                FoodDetails::create($foodDetailData);
-            }
-            DB::commit();
-            return new FoodsResource(true, "Data Saved", $request->validated());
-        } catch (Exception $e) {
-            DB::rollback();
-            return new FoodsResource(true, $e->getMessage(), $e);
-        }
+        return $this->foodInterface->storeFood($request);
     }
 
     public function update(Request $request, $id)
